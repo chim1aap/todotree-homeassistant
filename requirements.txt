@@ -8,7 +8,7 @@ ruff==0.12.2
 todotree
 
 # Other dependencies.
-aiohttp~=3.11.12
+aiohttp~=3.12.13
 async-timeout~=5.0.1
 voluptuous~=0.15.2
 python-slugify~=8.0.4
