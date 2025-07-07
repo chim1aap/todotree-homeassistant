@@ -1,0 +1,12 @@
+{
+  "domain": "todotree_homeassistant",
+  "name": "TodoTree Home Assistant integration",
+  "codeowners": [
+    "@chim1aap"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/chim1aap/todotree-homeassistant",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/chim1aap/todotree-homeassistant/issues",
+  "version": "0.1.0"
+}
