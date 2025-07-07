@@ -40,14 +40,14 @@ class IntegrationBlueprintApiClient:
 
     def __init__(
         self,
-        username: str,
-        password: str,
-        session: aiohttp.ClientSession,
+        #username: str,
+        #password: str,
+        #session: aiohttp.ClientSession,
     ) -> None:
-        """Sample API Client."""
-        self._username = username
-        self._password = password
-        self._session = session
+        """Sample API Client. TODO: Implement."""
+        #self._username = username
+        #self._password = password
+        #self._session = session
 
     async def async_get_data(self) -> Any:
         """Get data from the API."""
@@ -56,22 +56,13 @@ class IntegrationBlueprintApiClient:
             url="https://jsonplaceholder.typicode.com/posts/1",
         )
 
-    async def async_set_title(self, value: str) -> Any:
-        """Get data from the API."""
-        return await self._api_wrapper(
-            method="patch",
-            url="https://jsonplaceholder.typicode.com/posts/1",
-            data={"title": value},
-            headers={"Content-type": "application/json; charset=UTF-8"},
-        )
-
     async def _api_wrapper(
         self,
         method: str,
         url: str,
         data: dict | None = None,
         headers: dict | None = None,
-    ) -> Any:
+    ) -> any:
         """Get information from the API."""
         try:
             async with async_timeout.timeout(10):
@@ -99,3 +90,21 @@ class IntegrationBlueprintApiClient:
             raise IntegrationBlueprintApiClientError(
                 msg,
             ) from exception
+
+
+
+    async def create_task(self):
+        """Create a task."""
+        raise NotImplemented("This method is not implemented.")
+
+    async def update_task(self):
+        """Update the task."""
+        raise NotImplemented("This method is not implemented.")
+
+    async def delete_task(self):
+        """Delete the task."""
+        raise NotImplemented("This method is not implemented.")
+
+    async def _get_database(self):
+        """Get the list of all the tasks."""
+        raise NotImplemented("This method is not implemented.")

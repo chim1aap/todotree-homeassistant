@@ -2,6 +2,15 @@
 
 TodoTree integration to Home Assistant. 
 
+
+[![GitHub Release][releases-shield]][releases]
+[![GitHub Activity][commits-shield]][commits]
+[![License][license-shield]](LICENSE)
+![Project Maintenance][maintenance-shield]
+[![Community Forum][forum-shield]][forum]
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=JanGiese&repository=notion_todo&category=integration)
+
 ## What?
 
 This repository contains multiple files, here is a overview:

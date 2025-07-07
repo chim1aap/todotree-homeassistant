@@ -1,15 +1,18 @@
-"""DataUpdateCoordinator for custom_components/TodoTree."""
+"""DataUpdateCoordinator for TodoTree."""
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .const import DOMAIN, LOGGER
 from .api import (
     IntegrationBlueprintApiClientAuthenticationError,
-    IntegrationBlueprintApiClientError,
+    IntegrationBlueprintApiClientError, IntegrationBlueprintApiClient,
 )
 
 if TYPE_CHECKING:
@@ -17,10 +20,24 @@ if TYPE_CHECKING:
 
 
 # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
-class BlueprintDataUpdateCoordinator(DataUpdateCoordinator):
+class TodotreeUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching data from the API."""
 
     config_entry: IntegrationBlueprintConfigEntry
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: IntegrationBlueprintApiClient,
+    ) -> None:
+        """Initialize."""
+        self.client = client
+        super().__init__(
+            hass=hass,
+            logger=LOGGER,
+            name=DOMAIN,
+            update_interval=timedelta(minutes=5),
+        )
 
     async def _async_update_data(self) -> Any:
         """Update data via library."""
