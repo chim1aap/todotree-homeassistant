@@ -15,9 +15,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, TASK_STATUS_PROPERTY, TASK_DESCRIPTION_PROPERTY, TASK_DATE_PROPERTY
+from .const import DOMAIN
 from .coordinator import TodotreeUpdateCoordinator
-from .notion_property_helper import NotionPropertyHelper as propHelper
 
 
 async def async_setup_entry(
@@ -25,15 +24,15 @@ async def async_setup_entry(
 ) -> None:
     """Set up the todotree platform config entry."""
     coordinator: TodotreeUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = ['Notion']
+    entities = ['Todotree']
     async_add_entities(
-        NotionTodoListEntity(coordinator, e)
+        TodotreeTodoEntity(coordinator, e)
         for e in entities
     )
 
 
-class NotionTodoListEntity(CoordinatorEntity[TodotreeUpdateCoordinator], TodoListEntity):
-    """A Notion TodoListEntity."""
+class TodotreeTodoEntity(CoordinatorEntity[TodotreeUpdateCoordinator], TodoListEntity):
+    """A Todotree TodoListEntity."""
 
     _attr_supported_features = (
             TodoListEntityFeature.CREATE_TODO_ITEM
