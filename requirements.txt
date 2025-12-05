@@ -2,7 +2,7 @@
 # HACS dependencies.
 colorlog==6.9.0
 homeassistant==2025.2.4
-ruff==0.12.2
+ruff==0.14.8
 
 # Todotree dependencies.
 todotree
