@@ -10,5 +10,5 @@ todotree
 # Other dependencies.
 aiohttp~=3.11.12
 async-timeout~=5.0.1
-voluptuous~=0.15.2
+voluptuous~=0.16.0
 python-slugify~=8.0.4
