@@ -1,21 +1,15 @@
-"""Adds config flow for Todotree."""
+"""Config flow for the Todotree integration."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers import selector
-from homeassistant.helpers.aiohttp_client import async_create_clientsession
-from slugify import slugify
 
-from .api import (
-    TodotreeApiClient,
-    TodotreeApiClientAuthError,
-    TodotreeApiClientCommunicationError,
-    TodotreeApiClientError,
-)
-from .const import DOMAIN, LOGGER
+from .api import TodotreeApiClient, TodotreeApiClientError
+from .const import CONF_DATA_PATH, DOMAIN, LOGGER
 
 
 class TodotreeConfigFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
@@ -28,33 +22,28 @@ class TodotreeConfigFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         user_input: dict | None = None,
     ) -> config_entries.ConfigFlowResult:
         """Handle a flow initialized by the user."""
-        _errors = {}
+        errors: dict[str, str] = {}
         if user_input is not None:
+            data_path = user_input[CONF_DATA_PATH]
             try:
-                await self._test_credentials(
-                    username=user_input[CONF_USERNAME],
-                    password=user_input[CONF_PASSWORD],
-                )
-            except TodotreeApiClientAuthError as exception:
-                LOGGER.warning(exception)
-                _errors["base"] = "auth"
-            except TodotreeApiClientCommunicationError as exception:
-                LOGGER.error(exception)
-                _errors["base"] = "connection"
-            except TodotreeApiClientError as exception:
-                LOGGER.exception(exception)
-                _errors["base"] = "unknown"
+                client = TodotreeApiClient(data_path=data_path)
+                await client.async_validate()
+            except FileNotFoundError:
+                errors["base"] = "path_not_found"
+            except TodotreeApiClientError as exc:
+                LOGGER.exception("Unexpected error validating todotree path: %s", exc)
+                errors["base"] = "unknown"
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.exception("Unexpected error: %s", exc)
+                errors["base"] = "unknown"
             else:
-                await self.async_set_unique_id(
-                    ## Do NOT use this in production code
-                    ## The unique_id should never be something that can change
-                    ## https://developers.home-assistant.io/docs/config_entries_config_flow_handler#unique-ids
-                    unique_id=slugify(user_input[CONF_USERNAME])
-                )
+                # Use resolved absolute path as unique id (one entry per folder)
+                resolved = str(Path(data_path).expanduser().resolve())
+                await self.async_set_unique_id(resolved)
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
-                    title=user_input[CONF_USERNAME],
-                    data=user_input,
+                    title="Todotree",
+                    data={CONF_DATA_PATH: data_path},
                 )
 
         return self.async_show_form(
@@ -62,28 +51,14 @@ class TodotreeConfigFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required(
-                        CONF_USERNAME,
-                        default=(user_input or {}).get(CONF_USERNAME, vol.UNDEFINED),
+                        CONF_DATA_PATH,
+                        default=(user_input or {}).get(CONF_DATA_PATH, vol.UNDEFINED),
                     ): selector.TextSelector(
                         selector.TextSelectorConfig(
                             type=selector.TextSelectorType.TEXT,
                         ),
                     ),
-                    vol.Required(CONF_PASSWORD): selector.TextSelector(
-                        selector.TextSelectorConfig(
-                            type=selector.TextSelectorType.PASSWORD,
-                        ),
-                    ),
                 },
             ),
-            errors=_errors,
+            errors=errors,
         )
-
-    async def _test_credentials(self, username: str, password: str) -> None:
-        """Validate credentials."""
-        client = TodotreeApiClient(
-            username=username,
-            password=password,
-            session=async_create_clientsession(self.hass),
-        )
-        await client.async_get_data()

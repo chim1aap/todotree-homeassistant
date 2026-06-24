@@ -1,110 +1,135 @@
-"""Sample API Client."""
+"""Todotree client wrapper using local Python API (no HTTP)."""
 
 from __future__ import annotations
 
-import socket
-from typing import Any
+from dataclasses import dataclass
+from datetime import date, datetime
+from pathlib import Path
+from typing import Any, Iterable
+import asyncio
 
-import aiohttp
-import async_timeout
+from todotree import Config, TaskManager
+from todotree.Task.Task import Task
+from todotree.Commands.Add import Add
+from todotree.Commands.Do import Do
 
 
 class TodotreeApiClientError(Exception):
-    """Exception to indicate a general API error."""
+    """General client error."""
 
 
-class TodotreeApiClientCommunicationError(
-    TodotreeApiClientError,
-):
-    """Exception to indicate a communication error."""
+class TodotreeApiClientCommunicationError(TodotreeApiClientError):
+    """Unused placeholder to match coordinator patterns."""
 
 
-class TodotreeApiClientAuthError(
-    TodotreeApiClientError,
-):
-    """Exception to indicate an authentication error."""
+class TodotreeApiClientAuthError(TodotreeApiClientError):
+    """Unused (no auth) – kept for flow compatibility."""
 
 
-def _verify_response_or_raise(response: aiohttp.ClientResponse) -> None:
-    """Verify that the response is valid."""
-    if response.status in (401, 403):
-        msg = "Invalid credentials"
-        raise TodotreeApiClientAuthError(
-            msg,
-        )
-    response.raise_for_status()
+@dataclass(frozen=True)
+class TaskRecord:
+    number: int
+    text: str
+    due: date | None
 
 
 class TodotreeApiClient:
-    """Sample API Client."""
+    """Thin wrapper around todotree Config + TaskManager + Commands."""
 
-    def __init__(
-        self,
-        #username: str,
-        #password: str,
-        #session: aiohttp.ClientSession,
-    ) -> None:
-        """Sample API Client. TODO: Implement."""
-        #self._username = username
-        #self._password = password
-        #self._session = session
+    def __init__(self, data_path: str | None = None) -> None:
+        # data_path may be folder (containing config.yaml) or a config.yaml file
+        self._data_path = Path(data_path).expanduser() if data_path else None
 
-    async def async_get_data(self) -> Any:
-        """Get data from the API."""
-        return await self._api_wrapper(
-            method="get",
-            url="https://jsonplaceholder.typicode.com/posts/1",
-        )
+    def _load_config(self) -> Config:
+        cfg = Config()
+        # Trigger pull if in full mode happens implicitly in CLI, not here.
+        if self._data_path is None:
+            cfg.read()  # XDG defaults
+            return cfg
+        if self._data_path.is_dir():
+            config_file = self._data_path / "config.yaml"
+        else:
+            config_file = self._data_path
+        cfg.read(config_file)
+        return cfg
 
-    async def _api_wrapper(
-        self,
-        method: str,
-        url: str,
-        data: dict | None = None,
-        headers: dict | None = None,
-    ) -> any:
-        """Get information from the API."""
-        try:
-            async with async_timeout.timeout(10):
-                response = await self._session.request(
-                    method=method,
-                    url=url,
-                    headers=headers,
-                    json=data,
-                )
-                _verify_response_or_raise(response)
-                return await response.json()
+    def _load_manager(self, cfg: Config) -> TaskManager:
+        mgr = TaskManager(cfg)
+        mgr.import_tasks()
+        return mgr
 
-        except TimeoutError as exception:
-            msg = f"Timeout error fetching information - {exception}"
-            raise TodotreeApiClientCommunicationError(
-                msg,
-            ) from exception
-        except (aiohttp.ClientError, socket.gaierror) as exception:
-            msg = f"Error fetching information - {exception}"
-            raise TodotreeApiClientCommunicationError(
-                msg,
-            ) from exception
-        except Exception as exception:  # pylint: disable=broad-except
-            msg = f"Something really wrong happened! - {exception}"
-            raise TodotreeApiClientError(
-                msg,
-            ) from exception
+    async def async_validate(self) -> None:
+        """Validate config can be read and tasks imported."""
+        def _validate() -> None:
+            cfg = self._load_config()
+            _ = self._load_manager(cfg)
+        await asyncio.to_thread(_validate)
 
+    async def async_list_tasks(self) -> list[TaskRecord]:
+        def _list() -> list[TaskRecord]:
+            cfg = self._load_config()
+            mgr = self._load_manager(cfg)
+            # Apply same filters as printing tree would do
+            mgr.filter_block()
+            mgr.filter_t_date()
+            recs: list[TaskRecord] = [
+                TaskRecord(number=t.i, text=t.task_string.strip(), due=t.due_date)
+                for t in mgr.task_list
+            ]
+            return recs
+        return await asyncio.to_thread(_list)
 
+    async def async_add_task(self, text: str, due: date | None = None) -> TaskRecord:
+        def _add() -> TaskRecord:
+            cfg = self._load_config()
+            mgr = self._load_manager(cfg)
+            parts = [text]
+            if due:
+                parts.append(f"due:{due.isoformat()}")
+            # Use Command to ensure commit+push behavior consistent
+            add_cmd = Add(cfg, mgr)
+            task = add_cmd(" ".join(parts))
+            cfg.git.commit_and_push("add")
+            return TaskRecord(number=task.i, text=task.task_string.strip(), due=task.due_date)
+        return await asyncio.to_thread(_add)
 
-    async def create_task(self):
-        """Create a task."""
-        raise NotImplemented("This method is not implemented.")
+    async def async_complete_tasks(self, numbers: Iterable[int]) -> None:
+        def _do() -> None:
+            cfg = self._load_config()
+            mgr = self._load_manager(cfg)
+            do_cmd = Do(cfg, mgr)
+            _ = do_cmd(list(numbers))
+            cfg.git.commit_and_push("do")
+        await asyncio.to_thread(_do)
 
-    async def update_task(self):
-        """Update the task."""
-        raise NotImplemented("This method is not implemented.")
+    async def async_set_due(self, number: int, new_due: date | None) -> TaskRecord:
+        def _set() -> TaskRecord:
+            cfg = self._load_config()
+            mgr = self._load_manager(cfg)
+            # Update due date via Task method
+            def _update_due(task: Task, dt: datetime | None) -> None:
+                if dt is None:
+                    # Clear due by setting to past-empty; as Task has no explicit clear, overwrite text without due
+                    # Fallback: if None requested, append a space to force write then manual clear not supported
+                    pass
+                else:
+                    task.add_or_update_due(dt)
+            dt = datetime.combine(new_due, datetime.min.time()) if new_due else None
+            updated = mgr.add_or_update_task(number, _update_due, dt)
+            cfg.git.commit_and_push("update-due")
+            return TaskRecord(number=updated.i, text=updated.task_string.strip(), due=updated.due_date)
+        return await asyncio.to_thread(_set)
 
-    async def delete_task(self):
-        """Delete the task."""
-        raise NotImplemented("This method is not implemented.")
-
-    async def _get_database(self):
-        """Get the list of all the tasks."""
-        raise NotImplemented("This method is not implemented.")
+    async def async_append_description(self, number: int, extra: str) -> TaskRecord:
+        def _append() -> TaskRecord:
+            cfg = self._load_config()
+            mgr = self._load_manager(cfg)
+            new_text = mgr.append_to_task(number, f" {extra}")
+            cfg.git.commit_and_push("append")
+            # Reload to get fresh due parsing
+            mgr.import_tasks()
+            t = next((x for x in mgr.task_list if x.i == number), None)
+            if t is None:
+                raise TodotreeApiClientError(f"Task {number} not found after append")
+            return TaskRecord(number=t.i, text=t.task_string.strip(), due=t.due_date)
+        return await asyncio.to_thread(_append)

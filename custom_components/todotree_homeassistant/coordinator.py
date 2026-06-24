@@ -1,49 +1,39 @@
-"""DataUpdateCoordinator for TodoTree."""
+"""DataUpdateCoordinator for Todotree."""
 
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, LOGGER
-from .api import (
-    TodotreeApiClientAuthError,
-    TodotreeApiClientError, TodotreeApiClient,
-)
+from .api import TaskRecord, TodotreeApiClient, TodotreeApiClientError
+from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, LOGGER
 
 if TYPE_CHECKING:
     from .data import TodotreeConfigEntry
 
 
-# https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
-class TodotreeUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching data from the API."""
+class TodotreeUpdateCoordinator(DataUpdateCoordinator[list[TaskRecord]]):
+    """Polls todotree task list periodically."""
 
     config_entry: TodotreeConfigEntry
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        client: TodotreeApiClient,
-    ) -> None:
-        """Initialize."""
+    def __init__(self, hass: HomeAssistant, client: TodotreeApiClient) -> None:
         self.client = client
         super().__init__(
             hass=hass,
             logger=LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(minutes=5),
+            update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
         )
 
-    async def _async_update_data(self) -> Any:
-        """Update data via library."""
+    async def _async_update_data(self) -> list[TaskRecord]:
+        """Fetch tasks from todotree."""
         try:
-            return await self.config_entry.runtime_data.client.async_get_data()
-        except TodotreeApiClientAuthError as exception:
-            raise ConfigEntryAuthFailed(exception) from exception
-        except TodotreeApiClientError as exception:
-            raise UpdateFailed(exception) from exception
+            return await self.client.async_list_tasks()
+        except TodotreeApiClientError as exc:
+            raise UpdateFailed(f"Error fetching todotree tasks: {exc}") from exc
+        except Exception as exc:
+            raise UpdateFailed(f"Unexpected error: {exc}") from exc
