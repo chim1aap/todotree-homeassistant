@@ -56,8 +56,10 @@ class TodotreeApiClient:
         Initialize with optional path to todotree config/data folder.
 
         Args:
-            data_path: Directory containing todotree data and config.yaml.
-                All relative paths in config.yaml resolve from here.
+            data_path: Directory containing todotree data and config.yaml,
+                or absolute path to a config.yaml file directly.
+                Relative paths in config.yaml resolve from the directory
+                (or the file's parent directory when a file path is given).
                 If None, todotree XDG defaults are used.
 
         """
@@ -71,12 +73,21 @@ class TodotreeApiClient:
         Todotree config may contain relative paths (e.g. folder: .).
         Those resolve relative to CWD.  By switching to data_path we
         ensure they resolve correctly inside the container.
+
+        Accepts both directories and absolute config file paths.
+        When a file is given, its parent directory is used.
         """
-        if self._data_path is None or not self._data_path.is_dir():
+        if self._data_path is None:
+            yield
+            return
+        target = (
+            self._data_path if self._data_path.is_dir() else self._data_path.parent
+        )
+        if not target.is_dir():
             yield
             return
         prev = Path.cwd()
-        os.chdir(self._data_path)
+        os.chdir(target)
         try:
             yield
         finally:
