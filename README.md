@@ -15,7 +15,8 @@ A custom Home Assistant integration for [Todotree](https://pypi.org/project/todo
 
 - Home Assistant 2025.2+
 - [Todotree](https://pypi.org/project/todotree/) installed and configured on the same machine
-- A valid todotree config folder (typically `~/.local/share/todotree/` or `~/.config/todotree/`)
+- A valid todotree data folder (typically `~/.local/share/todotree/` or `~/.config/todotree/`)
+- **Git authentication must already be configured** in the container running Home Assistant (see below)
 
 ## Installation
 
@@ -51,6 +52,33 @@ If your todotree `config.yaml` has `git.mode: full`:
 - Every modification (add/complete/update) triggers `git commit && git push`.
 - Task list refresh triggers `git pull` (rate-limited to once per minute).
 - Multi-device sync works automatically.
+
+### Prerequisites: Git Authentication in the Container
+
+The todotree data folder must already be a working git repository with push/pull access configured **before** setting up this integration. The `data_path` you provide during configuration simply points to that location.
+
+You must ensure:
+
+1. **The git repo is cloned** into the container (e.g., `/data/todotree/` or `/config/todotree/`).
+2. **Authentication is pre-configured** so that `git pull` and `git push` work without prompts. Common approaches:
+   - SSH key with no passphrase mounted into the container
+   - Git credential helper with a stored token
+   - `.netrc` file with a personal access token
+3. **Git user identity is set** (`user.name` and `user.email` in git config).
+
+Example setup for an HA OS addon or Docker container:
+
+```bash
+# Inside the container:
+git clone M9RaO7kRVeU0rcqKeYHbpa9c3vLYRZew24mrx5NCMWc=:youruser/todotree-data.git /data/todotree
+cd /data/todotree
+git config user.name "Home Assistant"
+git config user.email "eRsVJAXNYBqcbIBZzVITbhA5jWuXGbdPNfm_PY_2bkU="
+```
+
+Then in the integration config flow, enter `/data/todotree` as the data path.
+
+> **Note**: A future version may support cloning and configuring the repository directly from the UI.
 
 ## Development
 
