@@ -94,9 +94,7 @@ class TodotreeApiClient:
 
         return await asyncio.to_thread(_list)
 
-    async def async_add_task(
-        self, text: str, due: date | None = None
-    ) -> TaskRecord:
+    async def async_add_task(self, text: str, due: date | None = None) -> TaskRecord:
         """Add new task and commit+push."""
 
         def _add() -> TaskRecord:
@@ -128,9 +126,7 @@ class TodotreeApiClient:
 
         await asyncio.to_thread(_do)
 
-    async def async_set_due(
-        self, number: int, new_due: date | None
-    ) -> TaskRecord:
+    async def async_set_due(self, number: int, new_due: date | None) -> TaskRecord:
         """Update due date on a task and commit+push."""
 
         def _set() -> TaskRecord:
@@ -141,11 +137,7 @@ class TodotreeApiClient:
                 if dt is not None:
                     task.add_or_update_due(dt)
 
-            dt = (
-                datetime.combine(new_due, datetime.min.time())
-                if new_due
-                else None
-            )
+            dt = datetime.combine(new_due, datetime.min.time()) if new_due else None
             updated = mgr.add_or_update_task(number, _update_due, dt)
             cfg.git.commit_and_push("update-due")
             return TaskRecord(
@@ -156,9 +148,7 @@ class TodotreeApiClient:
 
         return await asyncio.to_thread(_set)
 
-    async def async_append_description(
-        self, number: int, extra: str
-    ) -> TaskRecord:
+    async def async_append_description(self, number: int, extra: str) -> TaskRecord:
         """Append text to task and commit+push."""
 
         def _append() -> TaskRecord:
@@ -167,9 +157,7 @@ class TodotreeApiClient:
             mgr.append_to_task(number, f" {extra}")
             cfg.git.commit_and_push("append")
             mgr.import_tasks()
-            t = next(
-                (x for x in mgr.task_list if x.i == number), None
-            )
+            t = next((x for x in mgr.task_list if x.i == number), None)
             if t is None:
                 msg = f"Task {number} not found after append"
                 raise TodotreeApiClientError(msg)
