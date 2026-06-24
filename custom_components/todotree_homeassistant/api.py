@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import os
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Generator, Iterable
 
 from todotree import Config, TaskManager
 from todotree.Commands.Add import Add
@@ -41,11 +43,44 @@ class TaskRecord:
 
 
 class TodotreeApiClient:
-    """Thin wrapper around todotree Config + TaskManager + Commands."""
+    """
+    Thin wrapper around todotree Config + TaskManager + Commands.
+
+    The data_path serves as the working directory for all todotree
+    operations.  Relative paths inside config.yaml are resolved from
+    this location.
+    """
 
     def __init__(self, data_path: str | None = None) -> None:
-        """Initialize with optional path to todotree config/data folder."""
+        """
+        Initialize with optional path to todotree config/data folder.
+
+        Args:
+            data_path: Directory containing todotree data and config.yaml.
+                All relative paths in config.yaml resolve from here.
+                If None, todotree XDG defaults are used.
+
+        """
         self._data_path = Path(data_path).expanduser() if data_path else None
+
+    @contextmanager
+    def _working_dir(self) -> Generator[None]:
+        """
+        Context manager that chdirs to data_path for the operation.
+
+        Todotree config may contain relative paths (e.g. folder: .).
+        Those resolve relative to CWD.  By switching to data_path we
+        ensure they resolve correctly inside the container.
+        """
+        if self._data_path is None or not self._data_path.is_dir():
+            yield
+            return
+        prev = Path.cwd()
+        os.chdir(self._data_path)
+        try:
+            yield
+        finally:
+            os.chdir(prev)
 
     def _load_config(self) -> Config:
         """Load todotree Config from path or XDG defaults."""
@@ -70,8 +105,9 @@ class TodotreeApiClient:
         """Validate config can be read and tasks imported."""
 
         def _validate() -> None:
-            cfg = self._load_config()
-            _ = self._load_manager(cfg)
+            with self._working_dir():
+                cfg = self._load_config()
+                _ = self._load_manager(cfg)
 
         await asyncio.to_thread(_validate)
 
@@ -79,18 +115,19 @@ class TodotreeApiClient:
         """Return active tasks filtered by blocks and threshold dates."""
 
         def _list() -> list[TaskRecord]:
-            cfg = self._load_config()
-            mgr = self._load_manager(cfg)
-            mgr.filter_block()
-            mgr.filter_t_date()
-            return [
-                TaskRecord(
-                    number=t.i,
-                    text=t.task_string.strip(),
-                    due=t.due_date,
-                )
-                for t in mgr.task_list
-            ]
+            with self._working_dir():
+                cfg = self._load_config()
+                mgr = self._load_manager(cfg)
+                mgr.filter_block()
+                mgr.filter_t_date()
+                return [
+                    TaskRecord(
+                        number=t.i,
+                        text=t.task_string.strip(),
+                        due=t.due_date,
+                    )
+                    for t in mgr.task_list
+                ]
 
         return await asyncio.to_thread(_list)
 
@@ -98,19 +135,20 @@ class TodotreeApiClient:
         """Add new task and commit+push."""
 
         def _add() -> TaskRecord:
-            cfg = self._load_config()
-            mgr = self._load_manager(cfg)
-            parts = [text]
-            if due:
-                parts.append(f"due:{due.isoformat()}")
-            add_cmd = Add(cfg, mgr)
-            task = add_cmd(" ".join(parts))
-            cfg.git.commit_and_push("add")
-            return TaskRecord(
-                number=task.i,
-                text=task.task_string.strip(),
-                due=task.due_date,
-            )
+            with self._working_dir():
+                cfg = self._load_config()
+                mgr = self._load_manager(cfg)
+                parts = [text]
+                if due:
+                    parts.append(f"due:{due.isoformat()}")
+                add_cmd = Add(cfg, mgr)
+                task = add_cmd(" ".join(parts))
+                cfg.git.commit_and_push("add")
+                return TaskRecord(
+                    number=task.i,
+                    text=task.task_string.strip(),
+                    due=task.due_date,
+                )
 
         return await asyncio.to_thread(_add)
 
@@ -118,11 +156,12 @@ class TodotreeApiClient:
         """Mark tasks done and commit+push."""
 
         def _do() -> None:
-            cfg = self._load_config()
-            mgr = self._load_manager(cfg)
-            do_cmd = Do(cfg, mgr)
-            _ = do_cmd(list(numbers))
-            cfg.git.commit_and_push("do")
+            with self._working_dir():
+                cfg = self._load_config()
+                mgr = self._load_manager(cfg)
+                do_cmd = Do(cfg, mgr)
+                _ = do_cmd(list(numbers))
+                cfg.git.commit_and_push("do")
 
         await asyncio.to_thread(_do)
 
@@ -130,21 +169,22 @@ class TodotreeApiClient:
         """Update due date on a task and commit+push."""
 
         def _set() -> TaskRecord:
-            cfg = self._load_config()
-            mgr = self._load_manager(cfg)
+            with self._working_dir():
+                cfg = self._load_config()
+                mgr = self._load_manager(cfg)
 
-            def _update_due(task: Task, dt: datetime | None) -> None:
-                if dt is not None:
-                    task.add_or_update_due(dt)
+                def _update_due(task: Task, dt: datetime | None) -> None:
+                    if dt is not None:
+                        task.add_or_update_due(dt)
 
-            dt = datetime.combine(new_due, datetime.min.time()) if new_due else None
-            updated = mgr.add_or_update_task(number, _update_due, dt)
-            cfg.git.commit_and_push("update-due")
-            return TaskRecord(
-                number=updated.i,
-                text=updated.task_string.strip(),
-                due=updated.due_date,
-            )
+                dt = datetime.combine(new_due, datetime.min.time()) if new_due else None
+                updated = mgr.add_or_update_task(number, _update_due, dt)
+                cfg.git.commit_and_push("update-due")
+                return TaskRecord(
+                    number=updated.i,
+                    text=updated.task_string.strip(),
+                    due=updated.due_date,
+                )
 
         return await asyncio.to_thread(_set)
 
@@ -152,19 +192,20 @@ class TodotreeApiClient:
         """Append text to task and commit+push."""
 
         def _append() -> TaskRecord:
-            cfg = self._load_config()
-            mgr = self._load_manager(cfg)
-            mgr.append_to_task(number, f" {extra}")
-            cfg.git.commit_and_push("append")
-            mgr.import_tasks()
-            t = next((x for x in mgr.task_list if x.i == number), None)
-            if t is None:
-                msg = f"Task {number} not found after append"
-                raise TodotreeApiClientError(msg)
-            return TaskRecord(
-                number=t.i,
-                text=t.task_string.strip(),
-                due=t.due_date,
-            )
+            with self._working_dir():
+                cfg = self._load_config()
+                mgr = self._load_manager(cfg)
+                mgr.append_to_task(number, f" {extra}")
+                cfg.git.commit_and_push("append")
+                mgr.import_tasks()
+                t = next((x for x in mgr.task_list if x.i == number), None)
+                if t is None:
+                    msg = f"Task {number} not found after append"
+                    raise TodotreeApiClientError(msg)
+                return TaskRecord(
+                    number=t.i,
+                    text=t.task_string.strip(),
+                    due=t.due_date,
+                )
 
         return await asyncio.to_thread(_append)
