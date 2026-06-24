@@ -1,14 +1,7 @@
-
-# HACS dependencies.
+# Development dependencies.
 colorlog==6.10.1
 homeassistant==2025.2.4
 ruff==0.15.12
 
-# Todotree dependencies.
+# Integration dependencies (also listed in manifest.json).
 todotree
-
-# Other dependencies.
-aiohttp~=3.13.3
-async-timeout~=5.0.1
-voluptuous~=0.16.0
-python-slugify~=8.0.4

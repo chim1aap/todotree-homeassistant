@@ -1,37 +1,102 @@
-# Notice
+# Todotree Home Assistant Integration
 
-TodoTree integration to Home Assistant. 
+[![hacs][hacsbadge]][hacs]
 
+A custom Home Assistant integration for [Todotree](https://pypi.org/project/todotree/) — a todo.txt-based task manager with Git sync.
 
-[![GitHub Release][releases-shield]][releases]
-[![GitHub Activity][commits-shield]][commits]
-[![License][license-shield]](LICENSE)
-![Project Maintenance][maintenance-shield]
-[![Community Forum][forum-shield]][forum]
+## Features
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=JanGiese&repository=notion_todo&category=integration)
+- **Todo entity**: Exposes your Todotree task list as a native Home Assistant `todo` entity.
+- **Full CRUD**: Create, update (due date, description), and complete tasks through HA UI or automations.
+- **Git full sync**: When Todotree is configured with `git.mode: full`, all changes automatically commit and push.
+- **Local polling**: Tasks are refreshed every 5 minutes from local files (no cloud dependency).
 
-## What?
+## Requirements
 
-This repository contains multiple files, here is a overview:
+- Home Assistant 2025.2+
+- [Todotree](https://pypi.org/project/todotree/) installed and configured on the same machine
+- A valid todotree data folder (typically `~/.local/share/todotree/` or `~/.config/todotree/`)
+- **Git authentication must already be configured** in the container running Home Assistant (see below)
 
-File | Purpose | Documentation
--- | -- | --
-`.devcontainer.json` | Used for development/testing with Visual Studio Code. | [Documentation](https://code.visualstudio.com/docs/remote/containers)
-`.github/ISSUE_TEMPLATE/*.yml` | Templates for the issue tracker | [Documentation](https://help.github.com/en/github/building-a-strong-community/configuring-issue-templates-for-your-repository)
-`custom_components/custom_components/TodoTree_HomeAssistant/*` | Integration files, this is where everything happens. | [Documentation](https://developers.home-assistant.io/docs/creating_component_index)
-`README.md` | The file you are reading now, should contain info about the integration, installation and configuration instructions. | [Documentation](https://help.github.com/en/github/writing-on-github/basic-writing-and-formatting-syntax)
+## Installation
 
-## How?
+### HACS (Recommended)
 
-1. Open your new repository in Visual Studio Code devcontainer (Preferably with the "`Dev Containers: Clone Repository in Named Container Volume...`" option).
-1. Run the `scripts/develop` to start HA and test out your new integration.
+1. Add this repository as a custom repository in HACS.
+2. Search for "Todotree" and install.
+3. Restart Home Assistant.
 
-## Next steps
+### Manual
 
-These are some next steps you may want to look into:
-- Add tests to your integration, [`pytest-homeassistant-custom-component`](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) can help you get started.
-- Add brand images (logo/icon) to https://github.com/home-assistant/brands.
-- Create your first release.
-- Share your integration on the [Home Assistant Forum](https://community.home-assistant.io/).
-- Submit your integration to [HACS](https://hacs.xyz/docs/publish/start).
+1. Copy `custom_components/todotree_homeassistant/` to your `config/custom_components/` folder.
+2. Restart Home Assistant.
+
+## Configuration
+
+1. Go to **Settings → Devices & Services → Add Integration**.
+2. Search for "Todotree".
+3. Enter the path to your todotree data folder (e.g., `/root/.local/share/todotree`).
+4. The integration validates the config and creates a `todo.todotree` entity.
+
+## Supported Operations
+
+| Operation | Description |
+| --- | --- |
+| Create item | Adds task to `todo.txt` with optional due date |
+| Update item | Sets due date or appends description |
+| Delete item | Marks task as done (moves to `done.txt`) |
+
+## Git Sync
+
+If your todotree `config.yaml` has `git.mode: full`:
+- Every modification (add/complete/update) triggers `git commit && git push`.
+- Task list refresh triggers `git pull` (rate-limited to once per minute).
+- Multi-device sync works automatically.
+
+### Prerequisites: Git Authentication in the Container
+
+The todotree data folder must already be a working git repository with push/pull access configured **before** setting up this integration. The `data_path` you provide during configuration simply points to that location.
+
+You must ensure:
+
+1. **The git repo is cloned** into the container (e.g., `/data/todotree/` or `/config/todotree/`).
+2. **Authentication is pre-configured** so that `git pull` and `git push` work without prompts. Common approaches:
+   - SSH key with no passphrase mounted into the container
+   - Git credential helper with a stored token
+   - `.netrc` file with a personal access token
+3. **Git user identity is set** (`user.name` and `user.email` in git config).
+
+Example setup for an HA OS addon or Docker container:
+
+```bash
+# Inside the container:
+git clone M9RaO7kRVeU0rcqKeYHbpa9c3vLYRZew24mrx5NCMWc=:youruser/todotree-data.git /data/todotree
+cd /data/todotree
+git config user.name "Home Assistant"
+git config user.email "eRsVJAXNYBqcbIBZzVITbhA5jWuXGbdPNfm_PY_2bkU="
+```
+
+Then in the integration config flow, enter `/data/todotree` as the data path.
+
+> **Note**: A future version may support cloning and configuring the repository directly from the UI.
+
+## Development
+
+```bash
+# Clone with devcontainer
+git clone <repo-url> && cd todotree-homeassistant
+# Open in VS Code with devcontainer, or:
+pip install -r requirements.txt
+```
+
+Run lint:
+```bash
+ruff check custom_components/ tests/
+```
+
+## License
+
+MIT
+
+[hacs]: https://github.com/hacs/integration
+[hacsbadge]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg

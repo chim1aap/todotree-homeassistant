@@ -1,9 +1,12 @@
-"""Constants for custom_components/TodoTree."""
+"""Constants for the Todotree integration."""
 
 from logging import Logger, getLogger
 
 LOGGER: Logger = getLogger(__package__)
 
 DOMAIN = "todotree_homeassistant"
-ATTRIBUTION = "Data provided whatever you have as a backend git repo."
 
+CONF_DATA_PATH = "data_path"
+CONF_GIT_MODE = "git_mode"
+
+DEFAULT_SCAN_INTERVAL = 300  # 5 minutes
