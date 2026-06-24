@@ -35,7 +35,7 @@ A custom Home Assistant integration for [Todotree](https://pypi.org/project/todo
 
 1. Go to **Settings → Devices & Services → Add Integration**.
 2. Search for "Todotree".
-3. Enter the path to your todotree data folder (e.g., `/root/.local/share/todotree`).
+3. Enter the path to your todotree data folder (e.g., `/root/.local/share/todotree`). This is the base directory from which any relative paths in `config.yaml` (e.g., `paths.folder`, `paths.todo_file`) are resolved.
 4. The integration validates the config and creates a `todo.todotree` entity.
 
 ## Supported Operations
