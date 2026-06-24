@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import voluptuous as vol
@@ -38,8 +39,10 @@ class TodotreeConfigFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
             else:
                 # Use resolved absolute path as unique id (one entry per folder)
-                resolved = str(Path(data_path).expanduser().resolve())
-                await self.async_set_unique_id(resolved)
+                resolved_path = await asyncio.to_thread(
+                    lambda: str(Path(data_path).expanduser().resolve())
+                )
+                await self.async_set_unique_id(resolved_path)
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
                     title="Todotree",

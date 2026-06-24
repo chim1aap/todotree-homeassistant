@@ -14,6 +14,7 @@ from .data import TodotreeData
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
+
     from .data import TodotreeConfigEntry
 
 PLATFORMS: list[Platform] = [Platform.TODO]
@@ -59,4 +60,5 @@ async def async_reload_entry(
     hass: HomeAssistant,
     entry: TodotreeConfigEntry,
 ) -> None:
+    """Reload Todotree config entry."""
     await hass.config_entries.async_reload(entry.entry_id)

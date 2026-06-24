@@ -5,8 +5,12 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+from homeassistant.helpers.update_coordinator import (
+    DataUpdateCoordinator,
+    UpdateFailed,
+)
 
 from .api import TaskRecord, TodotreeApiClient, TodotreeApiClientError
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN, LOGGER
@@ -21,6 +25,7 @@ class TodotreeUpdateCoordinator(DataUpdateCoordinator[list[TaskRecord]]):
     config_entry: TodotreeConfigEntry
 
     def __init__(self, hass: HomeAssistant, client: TodotreeApiClient) -> None:
+        """Initialize coordinator with client."""
         self.client = client
         super().__init__(
             hass=hass,
@@ -34,6 +39,8 @@ class TodotreeUpdateCoordinator(DataUpdateCoordinator[list[TaskRecord]]):
         try:
             return await self.client.async_list_tasks()
         except TodotreeApiClientError as exc:
-            raise UpdateFailed(f"Error fetching todotree tasks: {exc}") from exc
+            msg = f"Error fetching todotree tasks: {exc}"
+            raise UpdateFailed(msg) from exc
         except Exception as exc:
-            raise UpdateFailed(f"Unexpected error: {exc}") from exc
+            msg = f"Unexpected error: {exc}"
+            raise UpdateFailed(msg) from exc

@@ -1,6 +1,11 @@
+"""Pytest fixtures for Todotree integration tests."""
+
+from __future__ import annotations
+
 import pytest
-from unittest.mock import patch
+
 
 @pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations):  # noqa: PT005
-    yield
+def auto_enable_custom_integrations(_enable_custom_integrations: None) -> None:
+    """Enable custom integrations in HA test harness."""
+    return
