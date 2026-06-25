@@ -1,6 +1,7 @@
 # Deploying Home Assistant + Todotree
 
 This guide explains exactly how paths interact between host and container, and how to configure the Todotree integration.
+This only covers running from Docker. If you are using HAOS, shell into your system and just run `todotree init` to setup from scratch or git clone to the correct location. 
 
 ## Two Deployment Modes
 
