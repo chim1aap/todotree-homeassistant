@@ -3,102 +3,168 @@
 # This file shows EXACT path mapping between host and container.
 # Use it as reference and adapt host paths to your environment.
 #
-# Key path rules:
-# - Home Assistant config is at /config inside the container
-#   -> We bind-mount ./ha-config on the host to /config for easy editing
-#   -> Place the custom component under ./ha-config/custom_components/todotree_homeassistant
-#      OR install via HACS (then this bind mount still works)
+# ============================================================
+# TWO DEPLOYMENT MODES
+# ============================================================
 #
-# - Todotree data folder (todo.txt/done.txt/recur.txt/stale.txt and/or config.yaml)
-#   is mounted at /data/todotree inside the container from ./todotree on the host
-#   -> In the integration UI, set "Data Path" to one of:
-#        /data/todotree                    (directory: looks for config.yaml inside)
-#        /data/todotree/config.yaml        (absolute file path)
-#   -> If your config.yaml uses relative paths (e.g. paths.todo_file: "todo.txt"),
-#      integration resolves them relative to the selected Data Path directory.
+# MODE A: XDG DEFAULT (simplest — no config.yaml needed)
+#
+#   Todotree uses XDG defaults: $XDG_DATA_HOME/todotree
+#   Inside the HA container, root's XDG_DATA_HOME = /root/.local/share
+#   So the default path is /root/.local/share/todotree
+#
+#   -> Mount your host todotree folder to that exact path:
+#        ./todotree:/root/.local/share/todotree
+#   -> In the integration UI, leave Data Path EMPTY or enter:
+#        /root/.local/share/todotree
+#   -> No config.yaml needed: todotree finds todo.txt/done.txt/etc.
+#      in that folder automatically. Git mode defaults to "disabled".
+#   -> If you DO want git full sync, add a config.yaml in the folder
+#      with at least:  git: { mode: full }
+#
+# MODE B: CUSTOM PATH (explicit data_path)
+#
+#   Mount the todotree folder anywhere (e.g. /data/todotree):
+#        ./todotree:/data/todotree
+#   -> A config.yaml MUST exist at /data/todotree/config.yaml
+#      because todotree won't search XDG paths when given explicit path.
+#   -> In the integration UI, set Data Path to:
+#        /data/todotree              (directory: looks for config.yaml inside)
+#        /data/todotree/config.yaml  (absolute file path)
+#   -> Relative paths in config.yaml resolve from that directory.
+#
+# ============================================================
+# PATH RULES
+# ============================================================
+#
+# - Home Assistant config is at /config inside the container.
+#   -> Bind-mount ./ha-config to /config for easy editing.
+#   -> Place custom component under ./ha-config/custom_components/todotree_homeassistant
+#      OR install via HACS (bind mount still works).
 #
 # - Git full sync:
-#   Todotree uses GitPython and requires a working "git" binary and auth inside
-#   the Home Assistant container. Mount your SSH keys read-only to /root/.ssh or
-#   bake a custom image with git+openssh installed. Ensure the repository under
-#   /data/todotree is a valid git repo with origin set. Set git.mode: "full" in
-#   config.yaml for automatic pull/commit/push.
+#   Todotree uses GitPython. Requires working "git" binary and auth inside
+#   the container. Mount SSH keys read-only to /root/.ssh or bake a custom
+#   image with git+openssh. The todotree folder must be a valid git repo
+#   with origin configured. Set git.mode: "full" in config.yaml.
 #
 # - Timezone: set TZ to your zone. Example: Europe/Amsterdam
 #
-# Networking:
-# - Using host networking is recommended for Home Assistant to enable discovery
-#   and mDNS. Omit ports when using host networking.
+# - Networking: host networking recommended for HA (mDNS/discovery).
 
 services:
   homeassistant:
     image: ghcr.io/home-assistant/home-assistant:2025.2.4
-    # Host networking recommended for HA
     network_mode: host
     restart: unless-stopped
     environment:
       - TZ=Etc/UTC  # Change to your timezone
     volumes:
-      # Home Assistant configuration directory (editable on host)
+      # Home Assistant configuration directory
       - ./ha-config:/config
 
-      # Todotree data directory (git repo + todo files) mounted into container
-      # IMPORTANT:
-      # - This must contain either:
-      #   a) config.yaml + todo.txt/done.txt/... (recommended), OR
-      #   b) todo.txt/done.txt/... with built-in defaults
-      # - Ensure this folder is a git repository if using git.mode: full
-      - ./todotree:/data/todotree
+      # -----------------------------------------------------------
+      # TODOTREE DATA FOLDER — pick ONE of the two options below
+      # -----------------------------------------------------------
+
+      # OPTION A: XDG default location (no config.yaml required)
+      # Todotree auto-discovers files at $XDG_DATA_HOME/todotree
+      # For root user inside container: /root/.local/share/todotree
+      - ./todotree:/root/.local/share/todotree
+
+      # OPTION B: Custom location (config.yaml required in folder)
+      # Uncomment below and comment out Option A:
+      # - ./todotree:/data/todotree
+
+      # -----------------------------------------------------------
 
       # Optional: SSH keys for git over SSH (read-only)
-      # Make sure known_hosts contains your git host fingerprint
-      # Comment out if using HTTPS tokens or another auth method
+      # Ensure known_hosts contains your git host fingerprint
       - ~/.ssh:/root/.ssh:ro
 
-    # Optional: healthcheck (requires curl or wget in image; not present by default)
-    # healthcheck:
-    #   test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8123 || exit 1"]
-    #   interval: 30s
-    #   timeout: 5s
-    #   retries: 5
-
-# Usage notes:
+# ============================================================
+# USAGE NOTES
+# ============================================================
+#
 # 1) Prepare host directories:
 #    mkdir -p ./ha-config/custom_components
 #    mkdir -p ./todotree
 #
 # 2) Place this repository's custom component into:
 #    ./ha-config/custom_components/todotree_homeassistant
-#    (Or install via HACS: custom repository -> this repo)
+#    (Or install via HACS: add as custom repository)
 #
-# 3) Put your todotree data and config in ./todotree
-#    Example: ./todotree/config.yaml with:
-#      git:
-#        mode: full     # disabled|local|full
-#      paths:
-#        folder: .      # stay within /data/todotree
-#        todo_file: todo.txt
-#        done_file: done.txt
-#        recur_file: recur.txt
-#        stale_file: stale.txt
+# 3) Put your todotree data in ./todotree:
+#
+#    For OPTION A (XDG default):
+#      ./todotree/
+#      ├── todo.txt         (your active tasks)
+#      ├── done.txt         (completed tasks)
+#      ├── recur.txt        (recurring tasks, optional)
+#      ├── stale.txt        (inactive tasks, optional)
+#      └── config.yaml      (OPTIONAL - only needed for git mode)
+#
+#      If config.yaml is present, example contents:
+#        git:
+#          mode: full       # disabled|local|full
+#
+#      If config.yaml is absent, todotree uses built-in defaults:
+#        - git mode: disabled
+#        - all files read from this folder automatically
+#
+#    For OPTION B (custom path):
+#      ./todotree/
+#      ├── config.yaml      (REQUIRED)
+#      ├── todo.txt
+#      ├── done.txt
+#      └── ...
+#
+#      config.yaml must specify paths explicitly or use relative:
+#        git:
+#          mode: full
+#        paths:
+#          folder: .        # current directory = /data/todotree
+#          todo_file: todo.txt
+#          done_file: done.txt
+#          recur_file: recur.txt
+#          stale_file: stale.txt
 #
 # 4) Ensure git works inside the container:
-#    - SSH: mount ~/.ssh above, permissions 700 on ~/.ssh and 600 on private keys
-#    - HTTPS: pre-configure credentials in the repo or use a credentials helper
-#    - Verify: docker compose exec homeassistant git -C /data/todotree status
+#    - SSH: mount ~/.ssh above, permissions 700 on dir, 600 on keys
+#    - HTTPS: pre-configure credentials in repo or use helper
+#    - Verify: docker compose exec homeassistant git -C /root/.local/share/todotree status
 #
 # 5) Start stack:
 #    docker compose up -d
 #
 # 6) Add integration in Home Assistant UI:
-#    - Go to Settings -> Devices & Services -> Integrations -> Add integration
-#    - Search for "Todotree"
-#    - Set Data Path:
-#        /data/todotree              (directory) OR
-#        /data/todotree/config.yaml  (file)
-#    - Submit
+#    Settings -> Devices & Services -> Integrations -> Add -> "Todotree"
 #
-# Path interactions summary:
-# - Host ./todotree <-> Container /data/todotree <-> Integration Data Path
-# - Relative paths in config.yaml resolve from /data/todotree
-# - Git operations run against the repository at /data/todotree
+#    For OPTION A: leave Data Path empty (uses XDG default)
+#                  OR enter: /root/.local/share/todotree
+#    For OPTION B: enter: /data/todotree
+#                  OR:    /data/todotree/config.yaml
+#
+# ============================================================
+# PATH INTERACTION SUMMARY
+# ============================================================
+#
+# OPTION A (XDG default):
+#   Host: ./todotree
+#     ↕ bind mount
+#   Container: /root/.local/share/todotree
+#     ↕ todotree XDG auto-discovery
+#   Integration: Data Path = (empty) or /root/.local/share/todotree
+#     ↕ Config() reads config.yaml if present, else uses built-in defaults
+#   Files: todo.txt/done.txt/etc. all in same folder
+#
+# OPTION B (custom path):
+#   Host: ./todotree
+#     ↕ bind mount
+#   Container: /data/todotree
+#     ↕ integration chdirs here
+#   Integration: Data Path = /data/todotree
+#     ↕ Config().read(config.yaml) with relative paths resolving from /data/todotree
+#   Files: as defined in config.yaml paths section
+#
+# Git operations run against whichever folder contains the .git directory.
