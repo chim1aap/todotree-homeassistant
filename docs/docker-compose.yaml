@@ -1,0 +1,104 @@
+# docker-compose for Home Assistant + Todotree integration
+#
+# This file shows EXACT path mapping between host and container.
+# Use it as reference and adapt host paths to your environment.
+#
+# Key path rules:
+# - Home Assistant config is at /config inside the container
+#   -> We bind-mount ./ha-config on the host to /config for easy editing
+#   -> Place the custom component under ./ha-config/custom_components/todotree_homeassistant
+#      OR install via HACS (then this bind mount still works)
+#
+# - Todotree data folder (todo.txt/done.txt/recur.txt/stale.txt and/or config.yaml)
+#   is mounted at /data/todotree inside the container from ./todotree on the host
+#   -> In the integration UI, set "Data Path" to one of:
+#        /data/todotree                    (directory: looks for config.yaml inside)
+#        /data/todotree/config.yaml        (absolute file path)
+#   -> If your config.yaml uses relative paths (e.g. paths.todo_file: "todo.txt"),
+#      integration resolves them relative to the selected Data Path directory.
+#
+# - Git full sync:
+#   Todotree uses GitPython and requires a working "git" binary and auth inside
+#   the Home Assistant container. Mount your SSH keys read-only to /root/.ssh or
+#   bake a custom image with git+openssh installed. Ensure the repository under
+#   /data/todotree is a valid git repo with origin set. Set git.mode: "full" in
+#   config.yaml for automatic pull/commit/push.
+#
+# - Timezone: set TZ to your zone. Example: Europe/Amsterdam
+#
+# Networking:
+# - Using host networking is recommended for Home Assistant to enable discovery
+#   and mDNS. Omit ports when using host networking.
+
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:2025.2.4
+    # Host networking recommended for HA
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      - TZ=Etc/UTC  # Change to your timezone
+    volumes:
+      # Home Assistant configuration directory (editable on host)
+      - ./ha-config:/config
+
+      # Todotree data directory (git repo + todo files) mounted into container
+      # IMPORTANT:
+      # - This must contain either:
+      #   a) config.yaml + todo.txt/done.txt/... (recommended), OR
+      #   b) todo.txt/done.txt/... with built-in defaults
+      # - Ensure this folder is a git repository if using git.mode: full
+      - ./todotree:/data/todotree
+
+      # Optional: SSH keys for git over SSH (read-only)
+      # Make sure known_hosts contains your git host fingerprint
+      # Comment out if using HTTPS tokens or another auth method
+      - ~/.ssh:/root/.ssh:ro
+
+    # Optional: healthcheck (requires curl or wget in image; not present by default)
+    # healthcheck:
+    #   test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8123 || exit 1"]
+    #   interval: 30s
+    #   timeout: 5s
+    #   retries: 5
+
+# Usage notes:
+# 1) Prepare host directories:
+#    mkdir -p ./ha-config/custom_components
+#    mkdir -p ./todotree
+#
+# 2) Place this repository's custom component into:
+#    ./ha-config/custom_components/todotree_homeassistant
+#    (Or install via HACS: custom repository -> this repo)
+#
+# 3) Put your todotree data and config in ./todotree
+#    Example: ./todotree/config.yaml with:
+#      git:
+#        mode: full     # disabled|local|full
+#      paths:
+#        folder: .      # stay within /data/todotree
+#        todo_file: todo.txt
+#        done_file: done.txt
+#        recur_file: recur.txt
+#        stale_file: stale.txt
+#
+# 4) Ensure git works inside the container:
+#    - SSH: mount ~/.ssh above, permissions 700 on ~/.ssh and 600 on private keys
+#    - HTTPS: pre-configure credentials in the repo or use a credentials helper
+#    - Verify: docker compose exec homeassistant git -C /data/todotree status
+#
+# 5) Start stack:
+#    docker compose up -d
+#
+# 6) Add integration in Home Assistant UI:
+#    - Go to Settings -> Devices & Services -> Integrations -> Add integration
+#    - Search for "Todotree"
+#    - Set Data Path:
+#        /data/todotree              (directory) OR
+#        /data/todotree/config.yaml  (file)
+#    - Submit
+#
+# Path interactions summary:
+# - Host ./todotree <-> Container /data/todotree <-> Integration Data Path
+# - Relative paths in config.yaml resolve from /data/todotree
+# - Git operations run against the repository at /data/todotree
